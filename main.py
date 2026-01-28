@@ -157,7 +157,7 @@ async def call_groq_api(messages: list, model: str = "llama-3.3-70b-versatile", 
     
     # Use vision model if image present
     if has_image:
-        model = "llama-3.2-90b-vision-preview"
+        model = "llama-3.2-11b-vision-preview"
     
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
@@ -168,7 +168,7 @@ async def call_groq_api(messages: list, model: str = "llama-3.3-70b-versatile", 
         "model": model,
         "messages": messages,
         "temperature": 0.7,
-        "max_tokens": 4000 if has_image else 2000
+        "max_tokens": 2000
     }
     
     async with httpx.AsyncClient(timeout=60.0) as client:
