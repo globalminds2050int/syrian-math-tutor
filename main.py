@@ -229,33 +229,47 @@ async def solve_problem(
         
         # Handle image upload
         if image:
-            # Read image and convert to base64
-            image_data = await image.read()
-            base64_image = base64.b64encode(image_data).decode('utf-8')
-            
-            # Determine image mime type
-            mime_type = image.content_type or "image/jpeg"
-            
-            user_message = {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:{mime_type};base64,{base64_image}"
+            try:
+                # Read image and convert to base64
+                image_data = await image.read()
+                base64_image = base64.b64encode(image_data).decode('utf-8')
+                
+                # Determine image mime type
+                mime_type = image.content_type or "image/jpeg"
+                
+                # Detect language from problem_text
+                is_arabic = problem_text and any('\u0600' <= c <= '\u06FF' for c in problem_text)
+                instruction = "حل هذه المسألة من الصورة بالتفصيل بالعربي." if is_arabic else problem_text or "Solve this math problem from the image."
+                
+                user_message = {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime_type};base64,{base64_image}"
+                            }
+                        },
+                        {
+                            "type": "text",
+                            "text": instruction
                         }
-                    },
-                    {
-                        "type": "text",
-                        "text": problem_text or "Please solve this math problem from the image. Provide step-by-step explanation suitable for Syrian students."
-                    }
-                ]
-            }
+                    ]
+                }
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Image processing error: {str(e)}")
         else:
-            # Text-only problem
+            # Text-only problem - detect language
+            is_arabic = any('\u0600' <= c <= '\u06FF' for c in problem_text)
+            
+            if is_arabic:
+                instruction = f"{problem_text}\n\nمهم: أجب بالكامل باللهجة الشامية السورية فقط!"
+            else:
+                instruction = f"{problem_text}\n\nProvide adaptive teaching based on the problem difficulty."
+            
             user_message = {
                 "role": "user",
-                "content": f"Please solve this math problem: {problem_text}\n\nProvide adaptive teaching based on the problem difficulty."
+                "content": instruction
             }
         
         messages.append(user_message)
