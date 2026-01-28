@@ -183,14 +183,15 @@ async def root():
     return {
         "status": "online",
         "service": "Syrian Math Tutor API",
-        "version": "3.0",
+        "version": "3.1",
         "features": [
             "Adaptive teaching (5 language levels)",
             "Bilingual (Math ↔ Real World)",
             "Multiple teaching modes",
             "Creative explanations",
             "Emotional intelligence",
-            "Syrian curriculum aligned"
+            "Syrian curriculum aligned",
+            "Image upload support (vision)"
         ]
     }
 
@@ -239,29 +240,41 @@ async def solve_problem(
                 image_data = await image.read()
                 base64_image = base64.b64encode(image_data).decode('utf-8')
                 
-                # Determine image mime type
+                # Determine image mime type - Groq supports JPEG, PNG, GIF, WebP
                 mime_type = image.content_type or "image/jpeg"
+                
+                # Validate mime type
+                supported_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+                if mime_type not in supported_types:
+                    # Default to jpeg if unsupported
+                    mime_type = "image/jpeg"
                 
                 # Detect language from problem_text
                 is_arabic = problem_text and any('\u0600' <= c <= '\u06FF' for c in problem_text)
-                instruction = "حل هذه المسألة من الصورة بالتفصيل بالعربي." if is_arabic else problem_text or "Solve this math problem from the image."
+                instruction = "حل هذه المسألة من الصورة بالتفصيل بالعربي." if is_arabic else problem_text or "Solve this math problem from the image in detail."
                 
+                # FIXED: Correct format for Groq vision API
+                # The content should be a list with text and image_url objects
                 user_message = {
                     "role": "user",
                     "content": [
+                        {
+                            "type": "text",
+                            "text": instruction
+                        },
                         {
                             "type": "image_url",
                             "image_url": {
                                 "url": f"data:{mime_type};base64,{base64_image}"
                             }
-                        },
-                        {
-                            "type": "text",
-                            "text": instruction
                         }
                     ]
                 }
+                
+                print(f"✅ Image processed: {mime_type}, size: {len(image_data)} bytes")
+                
             except Exception as e:
+                print(f"❌ Image processing error: {str(e)}")
                 raise HTTPException(status_code=400, detail=f"Image processing error: {str(e)}")
         else:
             # Text-only problem - detect language
@@ -280,7 +293,17 @@ async def solve_problem(
         messages.append(user_message)
         
         # Call Groq API with vision if image present
-        response_data = await call_groq_api(messages, has_image=bool(image))
+        print(f"📤 Calling Groq API with model: {'llama-3.2-11b-vision-preview' if image else 'llama-3.3-70b-versatile'}")
+        
+        try:
+            response_data = await call_groq_api(messages, has_image=bool(image))
+        except httpx.HTTPStatusError as e:
+            print(f"❌ Groq API HTTP Error: {e.response.status_code}")
+            print(f"❌ Response content: {e.response.text}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Groq API error ({e.response.status_code}): {e.response.text}"
+            )
         
         # Extract solution from response
         if "choices" not in response_data or not response_data["choices"]:
@@ -290,6 +313,8 @@ async def solve_problem(
             )
         
         solution = response_data["choices"][0]["message"]["content"]
+        
+        print(f"✅ Solution generated successfully")
         
         return JSONResponse(content={
             "success": True,
