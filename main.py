@@ -152,8 +152,13 @@ Build confidence, create mathematicians! 🚀
 Respond in Arabic if problem is in Arabic, English if in English, or mix as needed."""
 
 
-async def call_groq_api(messages: list, model: str = "llama-3.3-70b-versatile") -> dict:
+async def call_groq_api(messages: list, model: str = "llama-3.3-70b-versatile", has_image: bool = False) -> dict:
     """Call Groq API directly using httpx"""
+    
+    # Use vision model if image present
+    if has_image:
+        model = "llama-3.2-90b-vision-preview"
+    
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type": "application/json"
@@ -274,8 +279,8 @@ async def solve_problem(
         
         messages.append(user_message)
         
-        # Call Groq API
-        response_data = await call_groq_api(messages)
+        # Call Groq API with vision if image present
+        response_data = await call_groq_api(messages, has_image=bool(image))
         
         # Extract solution from response
         if "choices" not in response_data or not response_data["choices"]:
